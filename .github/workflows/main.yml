@@ -81,7 +81,7 @@ jobs:
         #                               followed by '/', and ending with 'README.md'.
         #                               Adjust the pattern if your README files have different names or extensions.
         # -o: Only output the matched part of the line (the file path)
-        CHANGED_READMES=$(echo "$CHANGED_FILES" | grep -E '^solutions/[^/]+/README\.md')
+        CHANGED_READMES=$(echo "$CHANGED_FILES" | grep -E '^.*/[^/]+/README\.md')
 
         # Store the list of changed READMEs matching the pattern as a step output
         echo "changed_readmes<<EOF" >> "$GITHUB_OUTPUT"
