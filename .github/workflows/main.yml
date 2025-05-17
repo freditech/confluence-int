@@ -1,0 +1,105 @@
+name: README Changes and Publish to Confluence
+
+# Trigger the workflow on push and pull request events
+on:
+  workflow_dispatch:  # Enables manual trigger from GitHub UI
+  push:
+    # Specify branches if needed, e.g., main or master
+    branches:
+      - main
+ pull_request:
+   # Specify branches the PR targets if needed
+   branches:
+     - main
+
+jobs:
+  identify_changed_readmes:
+    runs-on: ubuntu-latest # Use an Ubuntu runner
+
+    steps:
+    - name: Checkout code
+      # Uses the actions/checkout@v4 action to get your code
+      # fetch-depth: 0 is crucial to fetch the full history needed for git diff comparisons
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get base and head SHAs for comparison
+      id: get-shas
+      run: |
+        # Determine the range of commits to compare based on the event type
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          # For pull requests, compare the base branch's head to the PR's head
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+        elif [[ "${{ github.event_name }}" == "push" ]]; then
+          # For pushes, compare the commit before the push to the head commit of the push
+          BASE_SHA="${{ github.event.before }}"
+          HEAD_SHA="${{ github.event.after }}"
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "This workflow was manually triggered."
+        else
+          # Handle unexpected event types (though configured above)
+          echo "Unsupported event type: ${{ github.event_name }}"
+          exit 1
+        fi
+
+        echo "Comparing changes between $BASE_SHA and $HEAD_SHA"
+        # Store the SHAs as step outputs for potential later use
+        echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_OUTPUT"
+        echo "HEAD_SHA=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+    - name: Identify changed files using git diff
+      id: changed-files
+      run: |
+        # Use git diff to get a list of files that were Added (A), Modified (M),
+        # Renamed (R), or Copied (C) between the base and head SHAs.
+        # --name-only: output only the names of the files
+        # --diff-filter=AMRC: filter for these specific types of changes
+        CHANGED_FILES=$(git diff --name-only --diff-filter=AMRC \
+                          ${{ steps.get-shas.outputs.BASE_SHA }} \
+                          ${{ steps.get-shas.outputs.HEAD_SHA }})
+
+        # Store the list of all changed files as a step output
+        echo "changed_files<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$CHANGED_FILES" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+    - name: Filter for README.md files in project folders
+      id: changed-readmes-filtered
+      run: |
+        # Get the list of all changed files from the previous step
+        CHANGED_FILES="${{ steps.changed-files.outputs.changed_files }}"
+
+        echo "Reviewing the following changed files:"
+        echo "$CHANGED_FILES" # Print all changed files for visibility
+  
+        # Use grep to filter the list:
+        # -E: Enable extended regular expressions
+        # '^solutions/[^/]+/README\.md': Matches lines starting with 'wrapper/',
+        #                               followed by one or more characters that are NOT a slash ([^/]+),
+        #                               followed by '/', and ending with 'README.md'.
+        #                               Adjust the pattern if your README files have different names or extensions.
+        # -o: Only output the matched part of the line (the file path)
+        CHANGED_READMES=$(echo "$CHANGED_FILES" | grep -E '^solutions/[^/]+/README\.md')
+
+        # Store the list of changed READMEs matching the pattern as a step output
+        echo "changed_readmes<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$CHANGED_READMES" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+    - name: Report on changed README files
+      # This step is an example of what you can do with the identified files
+      run: |
+        CHANGED_READMES="${{ steps.changed-readmes-filtered.outputs.changed_readmes }}"
+
+        if [ -z "$CHANGED_READMES" ]; then
+          echo "Result: No README.md files in 'wrapper/*/...' were changed in this event."
+        else
+          echo "Result: The following README.md files in 'wrapper/*/...' were changed:"
+          echo "$CHANGED_READMES"
+          # You can add more steps here, e.g.,
+          # - Trigger another workflow or script
+          # - Send a notification
+          # - Perform a specific check on these files
+        fi
