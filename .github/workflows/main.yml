@@ -3,10 +3,10 @@ name: README Changes and Publish to Confluence
 # Trigger the workflow on push and pull request events
 on:
   workflow_dispatch:  # Enables manual trigger from GitHub UI
-  push:
-    # Specify branches if needed, e.g., main or master
-    branches:
-      - main
+  # push:
+  #   # Specify branches if needed, e.g., main or master
+  #   branches:
+  #     - main
  pull_request:
    # Specify branches the PR targets if needed
    branches:
